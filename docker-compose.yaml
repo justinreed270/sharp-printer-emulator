@@ -1,0 +1,29 @@
+services:
+  frontend:
+    build:
+      context: .
+    container_name: sharp-printer-emulator
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./vite.config.js:/app/vite.config.js
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://backend:8000
+    depends_on:
+      - backend
+    stdin_open: true
+    tty: true
+
+  backend:
+    build:
+      context: ./backend
+    container_name: sharp-smtp-validator
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      - PYTHONUNBUFFERED=1

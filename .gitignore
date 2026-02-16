@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Environment files (CRITICAL - has your GitHub token!)
+.env
+.env.local
+
+# Build outputs
+dist/
+build/
+
+# Docker
+__pycache__/
+*.pyc
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Python
+*.pyc
+__pycache__/
+.pytest_cache/
