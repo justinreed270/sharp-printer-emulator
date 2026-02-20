@@ -1,155 +1,135 @@
 # Sharp MX-B468F Printer Emulator
 
-A full-stack microservices application that emulates a Sharp network printer's web management interface for safe testing of printer provisioning scripts without physical hardware.
+A full-stack microservices application that emulates the Sharp MX-B468F printer's web management interface — built to safely test and validate printer provisioning scripts without touching production hardware.
 
-## Purpose
+## Why This Exists
 
-This emulator was built to:
-- Test printer configuration scripts in a sandboxed environment
-- Validate SMTP settings with real authentication before deploying to production
-- Demonstrate security-conscious architecture for enterprise IT automation
+Enterprise IT teams that manage fleets of network printers face a real problem: there's no sandbox. Provisioning scripts have to be validated somewhere, and "somewhere" is usually a production printer. A misconfigured SMTP relay means scan-to-email breaks across an entire building. A bad credential means a support call. Testing in production isn't a workflow — it's a liability.
+
+This project solves that by providing a locally-running emulator that behaves like a real Sharp printer web interface, backed by a Python service that performs genuine SMTP authentication against real mail servers. You get real test results without real risk.
 
 ## Architecture
 
-**Microservices Design:**
-- **Frontend**: React UI (Port 5173) - Emulates Sharp printer web interface
-- **Backend**: Python FastAPI (Port 8000) - Performs real SMTP validation
+Two containers. One responsibility each.
 
-**Security Features:**
-- Separation of concerns (UI and sensitive operations isolated)
-- Real SMTP authentication testing
-- No credentials stored in frontend
-- CORS protection
-- Input validation
+```
+┌─────────────────────────────────────────────────────┐
+│                   Docker Network                    │
+│                                                     │
+│  ┌──────────────────┐      ┌──────────────────────┐ │
+│  │  Frontend        │      │  Backend             │ │
+│  │  React + Vite    │──-──▶│  Python FastAPI      │ │
+│  │  Port 5173       │      │  Port 8000           │ │
+│  │                  │      │                      │ │
+│  │  Emulates Sharp  │      │  Real SMTP testing   │ │
+│  │  web interface   │      │  DNS resolution      │ │
+│  └──────────────────┘      │  Auth validation     │ │
+│                            └──────────────────────┘ │
+└─────────────────────────────────────────────────────┘
+```
+
+**Why two containers instead of one?**
+
+The split is intentional. The frontend handles UI rendering and user interaction — work that belongs in the browser context. The backend handles outbound network connections and credential validation — work that must never happen client-side. Keeping these separate means credentials are never exposed in frontend code, the backend can be locked down independently, and each service can be updated or replaced without touching the other. This mirrors how you'd architect any production system where sensitive operations need to be isolated from the presentation layer.
+
+**Why FastAPI for the backend?**
+
+FastAPI gives you automatic input validation via Pydantic models, async support for network I/O (important when you're making real SMTP connections that may time out), and built-in OpenAPI documentation at `/docs`. For a service that takes structured input and makes outbound connections, it's the right tool. Flask would work but requires more boilerplate to get the same validation guarantees.
+
+**Why React + Vite for the frontend?**
+
+The Sharp printer web interface is a form-heavy UI. React's component model maps cleanly to that — each configuration section is a self-contained component with its own state. Vite keeps the development loop fast with hot module replacement, which matters when you're iterating on UI layout to match real printer behavior.
+
+## Security Design Decisions
+
+**Credentials never touch the frontend.** The React app collects SMTP credentials from the user and posts them to the backend API. The backend performs authentication. Credentials are never logged, never stored, and never returned to the client. This reflects how real enterprise systems handle sensitive data — the UI is a dumb form, the backend is the trust boundary.
+
+**Separation of concerns as a security control.** By isolating the SMTP connection logic in the backend container, the attack surface for credential exposure is minimized. Even if the frontend were compromised, it has no access to the SMTP credentials after they're submitted.
+
+**Known gap — SSRF mitigation.** The backend currently accepts any hostname as the SMTP gateway and attempts a connection. This is appropriate for a sandboxed development tool but would require input validation before production use — specifically an allowlist of permitted SMTP hosts and a denylist of internal IP ranges (RFC 1918, localhost, link-local). This is a documented future enhancement, not an oversight.
+
+**CORS.** Currently set to allow all origins for development convenience. A production deployment would restrict this to the specific frontend origin.
 
 ## Quick Start
 
 ### Prerequisites
-- Docker Desktop installed
-- Git
+- Docker Desktop
 
-### Run the Emulator
+### Run
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/sharp-printer-emulator.git
+git clone https://github.com/justinreed270/sharp-printer-emulator.git
 cd sharp-printer-emulator
-
-# Start both containers
 docker-compose up --build
-
-# Access the emulator
-# Frontend: http://localhost:5173
-# Backend API: http://localhost:8000
-# API Docs: http://localhost:8000/docs
 ```
 
-**Default Login:**
-- Username: `admin`
-- Password: `admin`
+**Frontend:** http://localhost:5173  
+**Backend API:** http://localhost:8000  
+**API Docs:** http://localhost:8000/docs  
 
-## Testing SMTP Configuration
+**Default credentials:** admin / admin
 
-1. Log in to the web interface
-2. Fill in SMTP settings (Gateway, Port, Credentials)
-3. Click "Test REAL Connection"
-4. Backend performs actual SMTP authentication
-5. View detailed results
+## How the SMTP Test Works
 
-**Supported SMTP Servers:**
-- Gmail (smtp.gmail.com:587)
-- Office 365 (smtp.office365.com:587)
-- Any standard SMTP server
+When you click "Test REAL Connection," the frontend POSTs your configuration to the backend `/test-smtp` endpoint. The backend then:
+
+1. Validates input via Pydantic model (port range, required fields)
+2. Resolves the SMTP hostname via DNS — confirms the server exists
+3. Opens a TCP connection to the specified host and port
+4. Negotiates TLS via STARTTLS if configured
+5. Attempts authentication with the provided credentials
+6. Returns a structured result with pass/fail status for each step
+
+This gives you the same signal a real printer would get when it tries to send a scan — before you've touched a single production device.
 
 ## Project Structure
+
 ```
-sharp-emulator/
-├── backend/              # Python FastAPI service
+sharp-printer-emulator/
+├── backend/
 │   ├── Dockerfile
-│   ├── main.py
+│   ├── main.py           # FastAPI service — SMTP validation logic
 │   └── requirements.txt
-├── src/                  # React frontend
-│   ├── App.jsx
+├── src/
+│   ├── App.jsx           # React frontend — printer UI emulation
 │   └── main.jsx
-├── docker-compose.yml    # Orchestrates both services
-├── Dockerfile           # Frontend container
-├── vite.config.js       # Vite configuration
-├── tailwind.config.js   # Tailwind CSS config
+├── docker-compose.yaml   # Service orchestration
+├── Dockerfile            # Frontend container
+├── vite.config.js
+├── tailwind.config.js
 └── README.md
 ```
 
 ## Development
 
-**Hot Reload Enabled**
+**Hot reload is enabled for both services.**
 
-Edit files locally and see changes instantly:
-- Frontend: Edit `src/App.jsx` and browser auto-refreshes
-- Backend: Edit `backend/main.py` and API auto-restarts
+Edit `src/App.jsx` — browser refreshes automatically.  
+Edit `backend/main.py` — API restarts automatically.
 
-**View Logs:**
 ```bash
-# Frontend logs
+# View logs
 docker logs sharp-printer-emulator --follow
-
-# Backend logs
 docker logs sharp-smtp-validator --follow
-```
 
-**Stop Services:**
-```bash
+# Stop
 docker-compose down
 ```
 
-## Security Considerations
+## Companion Project
 
-- Never use production credentials in test environments
-- Backend validates all inputs before SMTP connections
-- CORS restricted to localhost during development
-- Credentials never logged or persisted
-- SSRF protection through input validation
-- Rate limiting recommended for production deployments
+This emulator is designed to be tested against the [Sharp Automation Script](https://github.com/justinreed270/sharp-automation) — a Selenium-based provisioning tool that drives this interface the same way it would drive a real printer's web management page.
 
-## Use Cases
+Together they demonstrate a full provisioning pipeline: automation script → emulator → validated SMTP config → production deployment.
 
-- **IT Operations**: Test printer provisioning scripts safely
-- **DevOps**: Develop automation without hardware dependencies
-- **Security Testing**: Validate configurations before production deployment
-- **Training**: Learn printer management without production risk
+## Tech Stack
 
-## Troubleshooting
-
-**Containers won't start:**
-```bash
-docker-compose down
-docker-compose up --build
-```
-
-**Hot reload not working (Windows):**
-- Already configured with polling in `vite.config.js`
-
-**Port conflicts:**
-- Change ports in `docker-compose.yml` if 5173 or 8000 are in use
-
-**Check container status:**
-```bash
-docker ps
-```
-
-## Technical Stack
-
-- **Frontend**: React, Vite, Tailwind CSS
-- **Backend**: Python 3.11, FastAPI, Uvicorn
-- **Infrastructure**: Docker, Docker Compose
-- **SMTP**: Python smtplib with SSL/TLS support
-
-## API Documentation
-
-Once running, view interactive API documentation at:
-- Swagger UI: http://localhost:8000/docs
+| Layer | Technology | Why |
+|-------|------------|-----|
+| Frontend | React, Vite, Tailwind CSS | Component model fits form-heavy UI; fast dev loop |
+| Backend | Python 3.11, FastAPI, Uvicorn | Input validation, async I/O, auto-generated API docs |
+| SMTP | Python smtplib | Standard library, full SSL/TLS/STARTTLS support |
+| Infrastructure | Docker, Docker Compose | Reproducible environments; mirrors production deployment patterns |
 
 ## License
 
-MIT License - Feel free to use for learning and development
-
-## Author
-
-Built to demonstrate microservices architecture, security-first design principles, Docker containerization best practices, and full-stack development capabilities.
+MIT
