@@ -6,11 +6,35 @@ import smtplib
 import ssl
 from email.mime.text import MIMEText
 import socket
+import ipaddress
 import logging
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# SSRF protection: block connections to private/reserved IP ranges
+_BLOCKED_NETWORKS = [
+    ipaddress.ip_network("127.0.0.0/8"),    # loopback
+    ipaddress.ip_network("10.0.0.0/8"),      # RFC 1918 private
+    ipaddress.ip_network("172.16.0.0/12"),   # RFC 1918 private
+    ipaddress.ip_network("192.168.0.0/16"),  # RFC 1918 private
+    ipaddress.ip_network("169.254.0.0/16"),  # link-local
+    ipaddress.ip_network("100.64.0.0/10"),   # CGNAT shared space
+    ipaddress.ip_network("0.0.0.0/8"),       # unspecified
+    ipaddress.ip_network("::1/128"),         # IPv6 loopback
+    ipaddress.ip_network("fc00::/7"),        # IPv6 unique local
+    ipaddress.ip_network("fe80::/10"),       # IPv6 link-local
+]
+
+
+def _is_blocked_ip(ip: str) -> bool:
+    """Return True if the IP falls in a private/reserved range (SSRF guard)."""
+    try:
+        addr = ipaddress.ip_address(ip)
+        return any(addr in net for net in _BLOCKED_NETWORKS)
+    except ValueError:
+        return True  # unparseable address → block
 
 app = FastAPI(title="Sharp Printer SMTP Validator")
 
@@ -67,10 +91,10 @@ async def test_smtp_connection(config: SMTPConfig):
         
         # Step 2: DNS Resolution
         try:
-            ip_address = socket.gethostbyname(config.primaryGateway)
+            resolved_ip = socket.gethostbyname(config.primaryGateway)
             results.append({
                 "type": "success",
-                "message": f"✓ DNS resolution successful: {config.primaryGateway} -> {ip_address}"
+                "message": f"✓ DNS resolution successful: {config.primaryGateway} -> {resolved_ip}"
             })
         except socket.gaierror as e:
             results.append({
@@ -79,7 +103,20 @@ async def test_smtp_connection(config: SMTPConfig):
             })
             logger.error(f"DNS resolution failed: {e}")
             return TestResult(success=False, message="DNS resolution failed", details=results)
-        
+
+        # SSRF guard: reject private/reserved IPs before opening any connection
+        if _is_blocked_ip(resolved_ip):
+            results.append({
+                "type": "error",
+                "message": f"✗ Hostname resolves to a private/reserved IP ({resolved_ip}) — connection blocked"
+            })
+            logger.warning(f"SSRF attempt blocked: {config.primaryGateway} -> {resolved_ip}")
+            return TestResult(
+                success=False,
+                message="SSRF protection: target IP is not permitted",
+                details=results
+            )
+
         # Step 3: Connection Test
         results.append({
             "type": "info",
