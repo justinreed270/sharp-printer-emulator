@@ -46,7 +46,7 @@ The Sharp printer web interface is a form-heavy UI. React's component model maps
 
 **Separation of concerns as a security control.** By isolating the SMTP connection logic in the backend container, the attack surface for credential exposure is minimized. Even if the frontend were compromised, it has no access to the SMTP credentials after they're submitted.
 
-**Known gap — SSRF mitigation.** The backend currently accepts any hostname as the SMTP gateway and attempts a connection. This is appropriate for a sandboxed development tool but would require input validation before production use — specifically an allowlist of permitted SMTP hosts and a denylist of internal IP ranges (RFC 1918, localhost, link-local). This is a documented future enhancement, not an oversight.
+**SSRF mitigation.** The backend validates the resolved IP of any supplied SMTP hostname before opening a connection. Addresses in RFC 1918 private ranges, loopback, link-local (including cloud metadata endpoints like `169.254.169.254`), CGNAT shared space, and their IPv6 equivalents are blocked. The hostname is DNS-resolved first, the resulting IP is checked against a blocklist, and the connection is refused with a logged warning if the IP is non-routable. This prevents the `/test-smtp` endpoint from being used to probe internal network services or cloud instance metadata.
 
 **CORS.** Currently set to allow all origins for development convenience. A production deployment would restrict this to the specific frontend origin.
 
@@ -74,10 +74,11 @@ When you click "Test REAL Connection," the frontend POSTs your configuration to 
 
 1. Validates input via Pydantic model (port range, required fields)
 2. Resolves the SMTP hostname via DNS — confirms the server exists
-3. Opens a TCP connection to the specified host and port
-4. Negotiates TLS via STARTTLS if configured
-5. Attempts authentication with the provided credentials
-6. Returns a structured result with pass/fail status for each step
+3. Checks the resolved IP against a blocklist of private/reserved ranges (SSRF guard)
+4. Opens a TCP connection to the specified host and port
+5. Negotiates TLS via STARTTLS if configured
+6. Attempts authentication with the provided credentials
+7. Returns a structured result with pass/fail status for each step
 
 This gives you the same signal a real printer would get when it tries to send a scan — before you've touched a single production device.
 
