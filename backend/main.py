@@ -41,10 +41,10 @@ app = FastAPI(title="Sharp Printer SMTP Validator")
 # Enable CORS so React can call this API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict this!
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=False,
+    allow_methods=["POST", "GET"],
+    allow_headers=["Content-Type"],
 )
 
 class SMTPConfig(BaseModel):

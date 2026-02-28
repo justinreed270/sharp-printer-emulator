@@ -42,7 +42,7 @@ The Sharp printer web interface is a form-heavy UI. React's component model maps
 
 ## Security Design Decisions
 
-**Credentials never touch the frontend.** The React app collects SMTP credentials from the user and posts them to the backend API. The backend performs authentication. Credentials are never logged, never stored, and never returned to the client. This reflects how real enterprise systems handle sensitive data — the UI is a dumb form, the backend is the trust boundary.
+**SMTP credentials are collected by the frontend form and immediately POSTed to the backend.** They are never logged, never stored in state beyond the active session, and never returned to the client after submission. The backend performs authentication. Credentials are never logged, never stored, and never returned to the client. This reflects how real enterprise systems handle sensitive data — the UI is a dumb form, the backend is the trust boundary.
 
 **Separation of concerns as a security control.** By isolating the SMTP connection logic in the backend container, the attack surface for credential exposure is minimized. Even if the frontend were compromised, it has no access to the SMTP credentials after they're submitted.
 
