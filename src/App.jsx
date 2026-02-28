@@ -107,7 +107,6 @@ export default function App() {
         <button onClick={handleLogin} style={{ marginTop: '20px', width: '100%', padding: '10px', background: '#0066cc', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
           Login
         </button>
-        <p style={{ marginTop: '15px', fontSize: '12px', color: '#666' }}>Default: admin/admin</p>
       </div>
     );
   }
