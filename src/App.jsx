@@ -21,7 +21,7 @@ export default function App() {
     if (username === 'admin' && password === 'admin') {
       setAuthenticated(true);
     } else {
-      alert('Invalid credentials. Use: admin/admin');
+      alert('Hmmm - Try again. You have invalid credentials. ');
     }
   };
 
