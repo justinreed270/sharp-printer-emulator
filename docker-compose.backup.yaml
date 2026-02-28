@@ -1,27 +1,14 @@
 services:
-  scanner:
-    build: .
-    networks:
-      - sandbox-net
-
-  mailhog:
-    image: mailhog/mailhog
-    networks:
-      - sandbox-net
-    ports:
-      - "127.0.0.1:8025:8025"
-
   frontend:
     build:
       context: .
     container_name: sharp-printer-emulator
     ports:
-      - "127.0.0.1:5173:5173"
+      - "5173:5173"
     volumes:
       - ./src:/app/src
       - ./public:/app/public
       - ./vite.config.js:/app/vite.config.js
-      - /app/node_modules
     environment:
       - NODE_ENV=development
       - VITE_API_URL=http://backend:8000
@@ -29,25 +16,14 @@ services:
       - backend
     stdin_open: true
     tty: true
-    command: vite --host 0.0.0.0
-    networks:
-      - sandbox-net
 
   backend:
     build:
       context: ./backend
     container_name: sharp-smtp-validator
     ports:
-      - "127.0.0.1:8000:8000"
+      - "8000:8000"
     volumes:
       - ./backend:/app
     environment:
       - PYTHONUNBUFFERED=1
-    networks:
-      - sandbox-net
-
-networks:
-  sandbox-net:
-    driver: bridge
-    internal: true
-
