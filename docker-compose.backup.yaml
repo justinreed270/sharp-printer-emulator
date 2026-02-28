@@ -12,6 +12,9 @@ services:
     environment:
       - NODE_ENV=development
       - VITE_API_URL=http://backend:8000
+      - VITE_APP_USERNAME=${VITE_APP_USERNAME}
+      - VITE_APP_PASSWORD=${VITE_APP_PASSWORD}
+      
     depends_on:
       - backend
     stdin_open: true

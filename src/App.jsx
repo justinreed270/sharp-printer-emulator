@@ -18,7 +18,7 @@ export default function App() {
   });
 
   const handleLogin = () => {
-    if (username === 'admin' && password === 'admin') {
+    if (username === import.meta.env.VITE_APP_USERNAME && password === import.meta.env.VITE_APP_PASSWORD) {
       setAuthenticated(true);
     } else {
       alert('Hmmm - Try again. You have invalid credentials. ');
