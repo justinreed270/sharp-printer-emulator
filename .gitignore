@@ -1,9 +1,10 @@
 # Dependencies
 node_modules/
 
-# Environment files (CRITICAL - has your GitHub token!)
+# Environment files 
 .env
 .env.local
+.obsidian
 
 # Build outputs
 dist/
@@ -31,3 +32,6 @@ npm-debug.log*
 *.pyc
 __pycache__/
 .pytest_cache/
+
+# reports
+ssrf-remediation-report.md
