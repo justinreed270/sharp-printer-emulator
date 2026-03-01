@@ -9,6 +9,13 @@ export default defineConfig({
     watch: {
       usePolling: true,  // This fixes Windows file watching!
       interval: 1000     // Check every 1 second
+    },
+    proxy: {
+      '/api': {
+        target: 'http://backend:8000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      }
     }
   }
 })

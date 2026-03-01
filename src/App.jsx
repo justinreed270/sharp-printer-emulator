@@ -43,7 +43,7 @@ export default function App() {
     
     try {
       // Call the Python backend API
-      const response = await fetch('http://localhost:8000/test-smtp', {
+      const response = await fetch('/api/test-smtp', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
