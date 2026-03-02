@@ -1,11 +1,53 @@
 services:
-  mailhog:
-    image: mailhog/mailhog
+
+  # ── Fake SMTP server ───────────────────────────────────────────────────────
+  # Validates credentials against SMTP_VALID_USER / SMTP_VALID_PASSWORD.
+  # No mail is ever sent or stored; nothing ever leaves the Docker network.
+  smtp-server:
+    build:
+      context: ./smtp-server
+    container_name: sharp-smtp-server
+    environment:
+      - SMTP_VALID_USER=${SMTP_VALID_USER:-printer@local.test}
+      - SMTP_VALID_PASSWORD=${SMTP_VALID_PASSWORD:-changeme}
+      - SMTP_PORT=587
     networks:
       - sandbox-net
-    ports:
-      - "127.0.0.1:8025:8025"
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import smtplib; s=smtplib.SMTP('localhost',587,timeout=5); s.quit()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
+  # ── FastAPI backend ────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+    container_name: sharp-smtp-validator
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+      - SMTP_TEST_HOST=smtp-server
+      - SMTP_TEST_PORT=587
+    depends_on:
+      smtp-server:
+        condition: service_healthy
+    networks:
+      - sandbox-net
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ── React frontend ─────────────────────────────────────────────────────────
   frontend:
     build:
       context: .
@@ -30,26 +72,7 @@ services:
     networks:
       - sandbox-net
 
-  backend:
-    build:
-      context: ./backend
-    container_name: sharp-smtp-validator
-    ports:
-      - "127.0.0.1:8000:8000"
-    volumes:
-      - ./backend:/app
-    environment:
-      - PYTHONUNBUFFERED=1
-    networks:
-      - sandbox-net
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
-
 networks:
   sandbox-net:
     driver: bridge
-
+    internal: true   # Nothing in this stack touches the internet
